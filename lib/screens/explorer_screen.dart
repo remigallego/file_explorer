@@ -1,3 +1,4 @@
+import 'package:file_explorer/utils/explorer_item_utils.dart';
 import 'package:file_explorer/widgets/explorer_item.dart';
 import 'package:flutter/material.dart';
 import 'dart:io' as io;
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:permission/permission.dart';
 import 'dart:developer';
 import 'package:path/path.dart';
+import 'package:mime_type/mime_type.dart';
 
 const ROOT_DIRECTORY = "/storage/emulated/0";
 
@@ -14,20 +16,9 @@ class ExplorerScreen extends StatefulWidget {
 }
 
 class _ExplorerScreenState extends State<ExplorerScreen> {
-  String _currentDirectory;
-  List<ExplorerItemType> _items = [];
-
-  void setRootDirectory() {
-    if (io.Platform.isAndroid) {
-      setState(() {
-        _currentDirectory = ROOT_DIRECTORY;
-      });
-    } else {
-      setState(() {
-        _currentDirectory = ROOT_DIRECTORY;
-      });
-    }
-  }
+  String _currentDirectory = ROOT_DIRECTORY;
+  List<io.FileSystemEntity> _items = [];
+  final ScrollController _listViewController = ScrollController();
 
   handlePermissions() async {
     try {
@@ -52,58 +43,61 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   void initState() {
     super.initState();
     handlePermissions();
-    setRootDirectory();
-    resolveItemsData();
-  }
-
-  openNewFolder(item) {
     setState(() {
-      _currentDirectory = _currentDirectory + '/' + item.fileName;
+      _currentDirectory = ROOT_DIRECTORY;
     });
-    resolveItemsData();
+    getItems();
   }
 
-  handleDoubleTap(ExplorerItemType item) async {
-    var isDirectory = item.type == io.FileSystemEntityType.directory;
-    if (isDirectory) {
-      openNewFolder(item);
+  openNewFolder(String folderPath) {
+    void resetScroll() {
+      _listViewController.animateTo(
+        0.0,
+        curve: Curves.linear,
+        duration: const Duration(milliseconds: 1),
+      );
+    }
+
+    setState(() {
+      _currentDirectory = folderPath;
+    });
+    resetScroll();
+
+    getItems();
+  }
+
+  handleTap(io.FileSystemEntity item) {
+    if (isDirectory(item)) {
+      openNewFolder(_currentDirectory + '/' + getItemName(item));
     }
   }
 
-  resolveItemsData() async {
-    log(_currentDirectory);
-    var futures = io.Directory(_currentDirectory).listSync().map((item) async {
-      var newItem = new ExplorerItemType();
-      var type = await io.FileSystemEntity.type(item.path);
-      var fileName = basename(item.path);
-      newItem.type = type;
-      newItem.fileName = fileName;
-      return newItem;
-    });
-
-    Future.wait(futures).then((e) {
-      setState(() {
-        _items = e;
-      });
+  getItems() {
+    setState(() {
+      _items = io.Directory(_currentDirectory).listSync();
     });
   }
 
-  List<Widget> renderFiles() {
-    return _items.map((item) {
-      return ExplorerItem(
-        item: item,
-        onDoubleTap: () {
-          handleDoubleTap(item);
-        },
-      );
-    }).toList();
+  ListView renderItems() {
+    return ListView.builder(
+      controller: _listViewController,
+      itemBuilder: (context, position) {
+        io.FileSystemEntity item = _items[position];
+        print(item);
+        return ExplorerItem(
+          item: item,
+          openNewFolder: () {
+            openNewFolder(_currentDirectory + '/' + getItemName(item));
+          },
+        );
+      },
+      itemCount: _items.length,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     log('Current directory: $_currentDirectory');
-
-    /* resolveItemsData(); */
 
     return Scaffold(
       appBar: AppBar(
@@ -113,26 +107,19 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
           onPressed: () => {
             setState(() {
               var baseName = basename(_currentDirectory);
-              log(baseName);
-              setState(() {
-                if (_currentDirectory != ROOT_DIRECTORY) {
-                  _currentDirectory =
-                      _currentDirectory.replaceAll('/$baseName', '');
-                }
-              });
+              if (_currentDirectory != ROOT_DIRECTORY) {
+                openNewFolder(_currentDirectory.replaceAll('/$baseName', ''));
+              }
             })
           },
         ),
         elevation: 0,
         title: Text(
-          "Explorer",
+          _currentDirectory,
           style: TextStyle(color: Colors.black),
         ),
       ),
-      body: Center(
-          child: ListView(
-        children: renderFiles(),
-      )),
+      body: Center(child: renderItems()),
     );
   }
 }
