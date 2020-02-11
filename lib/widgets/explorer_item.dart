@@ -1,18 +1,24 @@
 import 'dart:developer';
 
 import 'package:file/file.dart';
+import 'package:file_explorer/providers/directory_provider.dart';
 import 'package:file_explorer/utils/explorer_item_utils.dart' as FileUtils;
 import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
 import 'dart:io' as io;
 import 'package:path/path.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class ExplorerItem extends StatefulWidget {
-  ExplorerItem({Key key, this.item, this.openNewFolder}) : super(key: key);
+  ExplorerItem(
+      {Key key, this.item, this.onPressed, this.onLongPress, this.selected})
+      : super(key: key);
 
   final io.FileSystemEntity item;
-  final Function openNewFolder;
+  final Function onPressed;
+  final Function onLongPress;
+  final bool selected;
 
   @override
   _ExplorerItemState createState() => _ExplorerItemState();
@@ -50,50 +56,40 @@ class _ExplorerItemState extends State<ExplorerItem> {
     }
   }
 
-  BoxDecoration renderContainerDecoration() {
-    if (_selected) {
-      return BoxDecoration(
-          color: Colors.blue, border: Border.all(color: Colors.grey[100]));
-    } else
-      return BoxDecoration(border: Border.all(color: Colors.grey[100]));
-  }
-
   @override
   Widget build(context) {
     String filename = FileUtils.getItemName(widget.item);
 
-    return GestureDetector(
-        onTap: () {
+    return MaterialButton(
+        padding: EdgeInsets.all(0),
+        onPressed: () {
           if (FileUtils.isDirectory(widget.item)) {
-            widget.openNewFolder();
+            widget.onPressed();
           } else {
             OpenFile.open(widget.item.path);
           }
         },
-        onDoubleTap: () {
-          if (FileUtils.isFile(widget.item)) {}
-        },
         onLongPress: () {
-          print('Long press');
+          widget.onLongPress();
         },
-        child: Container(
-          padding: EdgeInsets.all(10),
+        child: AnimatedContainer(
+          duration: Duration(milliseconds: 200),
+          padding: EdgeInsets.all(6),
           decoration: BoxDecoration(
-              color: _selected ? Colors.blue : Colors.transparent,
-              border: Border.all(color: Colors.grey[100])),
+            color: widget.selected ? Colors.blue : Colors.transparent,
+          ),
           child: Row(
             children: <Widget>[
               Container(
                 child: renderIcon(),
-                padding: EdgeInsets.only(right: 15),
               ),
               Flexible(
                 child: ListTile(
                   title: Text(
                     filename,
                     style: TextStyle(
-                        fontSize: 24,
-                        color: _selected ? Colors.white : Colors.black),
+                        fontSize: 16,
+                        color: widget.selected ? Colors.white : Colors.black),
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: renderSubTitle(),
